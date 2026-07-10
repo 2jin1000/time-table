@@ -57,7 +57,7 @@
   table.tt td.tcol{background:#f7f9fb;font-weight:600;white-space:nowrap;width:52px}
   table.tt td.pcol{background:#f7f9fb;font-weight:700;width:26px}
   table.tt td.lunch{background:#fff7ed;color:#c2410c;font-weight:700;letter-spacing:6px}
-  table.tt td.cell{width:60px;height:34px;line-height:1.25;font-weight:600;overflow:hidden;cursor:pointer;transition:opacity .15s,box-shadow .15s,filter .15s;padding:0}
+  table.tt td.cell{width:60px;height:34px;line-height:1.25;font-weight:600;overflow:hidden;cursor:pointer;transition:opacity .15s,box-shadow .15s,filter .15s;padding:0;position:relative}
   table.tt td.cell .cn{font-weight:700;padding:2px 2px 1px}
   table.tt td.cell .pr{font-size:9.5px;opacity:.92;padding:1px 2px;border-top:1px solid rgba(0,0,0,.32)}
   table.tt td.cell .rm{font-size:9.5px;color:#1f2937;padding:1px 2px;border-top:1px solid rgba(0,0,0,.32)}
@@ -66,6 +66,33 @@
   table.tt td.cell.hl .cn{font-weight:800}
   table.tt td.cell.dim{opacity:.22;filter:grayscale(.6)}
   table.tt td.na{background:repeating-linear-gradient(45deg,#f6f7f9,#f6f7f9 4px,#eef0f3 4px,#eef0f3 8px)}
+  /* 손으로 입력한 수업: 보라색 점선 테두리 + 수정 배지 */
+  table.tt td.cell.manual{box-shadow:inset 0 0 0 2px #7c3aed}
+  table.tt td.cell.manual.hl{box-shadow:inset 0 0 0 3px #1d4ed8}
+  table.tt td.cell.noprof{background:#e9edf2;color:#334155}
+  .mbadge{position:absolute;top:0;right:0;width:13px;height:13px;line-height:13px;font-size:9px;
+       background:#7c3aed;color:#fff;border-bottom-left-radius:4px;cursor:pointer;z-index:2}
+  .mbadge:hover{background:#5b21b6}
+  /* 빈 칸: 클릭하면 직접 입력 */
+  table.tt td.add{cursor:cell;padding:0;height:34px}
+  table.tt td.add:hover{background:#eef5ff;box-shadow:inset 0 0 0 2px #93c5fd}
+  table.tt td.add .plus{color:#2563eb;font-weight:700;font-size:12px;opacity:0}
+  table.tt td.add:hover .plus{opacity:1}
+  @media print{ .mbadge{display:none} table.tt td.add .plus{display:none} }
+  /* ===== 직접 입력 모달 ===== */
+  .mback{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;z-index:50;
+       align-items:center;justify-content:center;padding:16px}
+  .mback.open{display:flex}
+  .mbox{background:#fff;border-radius:12px;padding:16px 18px;width:340px;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+  .mbox h3{margin:0 0 2px;font-size:15px}
+  .mbox .slot{color:var(--muted);font-size:11.5px;margin-bottom:10px}
+  .mbox label{display:block;font-size:11.5px;color:var(--muted);margin:8px 0 3px;font-weight:600}
+  .mbox input,.mbox select{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:5px 6px;font-size:12.5px;background:#fff}
+  .mbox .acts{display:flex;gap:6px;margin-top:14px}
+  .mbox .acts .sp{flex:1}
+  #mErr{color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;
+       padding:6px 8px;font-size:11.5px;margin-top:8px;display:none}
+  #mErr.show{display:block}
   .legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}
   .legend .lghint{font-size:11.5px;color:var(--muted);margin-right:4px}
   .legend .lg{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:6px;padding:3px 9px;background:#fff;font-size:11.5px;cursor:pointer;user-select:none;transition:background .15s,border-color .15s,box-shadow .15s}
@@ -154,8 +181,12 @@
     <div class="toolbar">
       <button class="btn primary" onclick="generate()">⚙️ 시간표 생성</button>
       <button class="btn ghost small" onclick="printResult()">🖨️ 인쇄 / PDF</button>
+      <button class="btn ghost small" onclick="clearManual()">🧹 직접 입력 전체 삭제</button>
       <span id="stats" class="muted"></span>
     </div>
+    <p class="hint" style="margin:-4px 0 8px">✍️ 빈 칸을 클릭하면 수업을 <b>직접 입력</b>할 수 있습니다.
+      직접 입력한 수업은 보라색 테두리로 표시되며, 오른쪽 위 <span class="pill">✎</span> 를 눌러 수정·삭제합니다.
+      담당 교수를 지정하면 <b>교수 범례 클릭 시 함께 강조</b>되고, 시간표를 다시 생성해도 그 자리는 그대로 유지됩니다.</p>
     <div id="messages"></div>
     <details class="help">
       <summary>배정 규칙 요약 (PRD 기반)</summary>
@@ -172,6 +203,29 @@
     <div id="legend" class="legend"></div>
   </section>
 </main>
+
+<!-- 시간표 칸 직접 입력/수정 모달 -->
+<div id="modalBack" class="mback" onclick="if(event.target===this)closeEditor()">
+  <div class="mbox">
+    <h3 id="mTitle">수업 직접 입력</h3>
+    <div class="slot" id="mSlot"></div>
+    <label>과목명</label>
+    <input id="mName" placeholder="예) 소방학개론" onkeydown="if(event.key==='Enter')saveManual()">
+    <label>담당 교수 <span class="muted">(지정하면 범례 클릭 시 강조됩니다)</span></label>
+    <select id="mProf"></select>
+    <label>강의실</label>
+    <select id="mRoom"></select>
+    <label>강좌시수 (연속 교시 수)</label>
+    <select id="mHours"></select>
+    <div id="mErr"></div>
+    <div class="acts">
+      <button class="btn small danger" id="mDel" onclick="deleteManual()">삭제</button>
+      <span class="sp"></span>
+      <button class="btn ghost small" style="border-color:#cbd5e1;color:#475569" onclick="closeEditor()">취소</button>
+      <button class="btn primary small" onclick="saveManual()">저장</button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ============================================================
@@ -201,8 +255,18 @@ let state = emptyState();
 let uid = 1;
 function nid(){ return 'id'+(uid++); }
 function emptyState(){
-  return { classrooms:[], courses:[], professors:[], assign:{} , timetable:null };
+  return { classrooms:[], courses:[], professors:[], assign:{} , timetable:null, manual:[] };
 }
+
+/* 자동 생성된 수업 + 손으로 입력한 수업을 한 배열로 합쳐 준다.
+   두 종류를 동일한 모양({day,start,covered,grade,section,profId,roomId})으로 맞추면
+   렌더링·충돌검사·교수 강조가 모두 같은 코드를 탄다. */
+function coveredOf(start,hours){ const c=[]; for(let p=start;p<start+hours;p++) c.push(p); return c; }
+function autoBlocks(){ return (state.timetable && state.timetable.blocks) || []; }
+function manualBlocks(){
+  return (state.manual||[]).map(m=>({...m, covered:coveredOf(m.start,m.hours), manual:true}));
+}
+function allBlocks(){ return autoBlocks().concat(manualBlocks()); }
 
 /* ============================================================
    입력 테이블 렌더링
@@ -307,11 +371,18 @@ function addRoom(){ state.classrooms.push({id:nid(),name:'',isPC:false}); render
 function addCourse(){ state.courses.push({id:nid(),name:'',grade:1,hours:3,computer:false}); autoAssign(); render(); persist(); }
 function addProf(){ state.professors.push({id:nid(),name:'',day1:'',day2:'',courses:[]}); render(); persist(); }
 function delRow(kind,id){
-  if(kind==='room') state.classrooms = state.classrooms.filter(x=>x.id!==id);
+  if(kind==='room'){
+    state.classrooms = state.classrooms.filter(x=>x.id!==id);
+    (state.manual||[]).forEach(m=>{ if(m.roomId===id) m.roomId=''; }); // 손입력 칸의 끊긴 참조 정리
+  }
   if(kind==='course'){ state.courses = state.courses.filter(x=>x.id!==id); delete state.assign[id]; }
-  if(kind==='prof') state.professors = state.professors.filter(x=>x.id!==id);
+  if(kind==='prof'){
+    state.professors = state.professors.filter(x=>x.id!==id);
+    (state.manual||[]).forEach(m=>{ if(m.profId===id) m.profId=''; });
+    if(activeProf===id) activeProf=null;
+  }
   if(kind!=='room') autoAssign();
-  render(); persist();
+  render(); renderTimetable(); persist();
 }
 
 function professorsForCourse(courseName){
@@ -530,6 +601,22 @@ function generate(){
   const pcRooms=rooms.filter(r=>r.isPC);
   const anyPC=pcRooms.length>0;
 
+  // 손으로 입력한 수업은 '이미 배정된 자리'로 간주하여 점유 상태에 미리 반영한다.
+  // (자동 배정이 그 자리를 침범하지 않고, 반의 하루 과목 수에도 함께 포함된다)
+  function seedManual(){
+    manualBlocks().forEach(m=>{
+      const secKey=m.grade+'-'+m.section;
+      m.covered.forEach(p=>{
+        secBusy.add(K(secKey,m.day,p));
+        if(m.profId) profBusy.add(K(m.profId,m.day,p));
+        if(m.roomId) roomBusy.add(K(m.roomId,m.day,p));
+      });
+      secDayCnt.set(K(secKey,m.day,'c'),(secDayCnt.get(K(secKey,m.day,'c'))||0)+1);
+      if(m.profId) profDayCnt.set(K(m.profId,m.day,'c'),(profDayCnt.get(K(m.profId,m.day,'c'))||0)+1);
+    });
+  }
+  seedManual();
+
   // 후보 슬롯(시작교시) — 점심(4교시) 넘지 않음
   function startsFor(h){
     const arr=[];
@@ -660,6 +747,7 @@ function generate(){
     // 완전해 실패(과도한 제약/시간초과) → 최대한 많이 배치 후 복구 시도
     secBusy.clear();profBusy.clear();roomBusy.clear();secDayCnt.clear();profDayCnt.clear();
     blocks.forEach(b=>{b.day=b.start=b.covered=b.roomId=null;});
+    seedManual(); // 직접 입력한 자리는 복구 배치에서도 그대로 보호
     // 1) 그리디 MRV: 매번 후보가 가장 적은 과목부터 배치
     const pool=blocks.slice();
     while(pool.length){
@@ -733,7 +821,7 @@ function generate(){
 
   state.timetable = { blocks: blocks.map(b=>({...b,prof:undefined})), generatedAt:new Date().toLocaleString('ko-KR') };
   persist();
-  renderResult(blocks, unplacedInfo, solved, steps);
+  renderResult(unplacedInfo, solved, steps);
 }
 
 /* ============================================================
@@ -745,7 +833,16 @@ function profColorMap(){
   return map;
 }
 
-function renderResult(blocks, unplaced, solved, steps){
+/* 시간표 표 + 범례를 다시 그린다. 자동 생성 결과가 없어도(빈 표) 호출 가능 —
+   빈 칸을 클릭해 직접 입력할 수 있어야 하므로 표 자체는 항상 존재한다. */
+function renderTimetable(){
+  const blocks = allBlocks();
+  drawGrid(blocks);
+  drawLegend(blocks);
+  applyHighlight(); // 강조 중이던 교수가 있으면 새로 그린 칸에도 다시 적용
+}
+
+function drawGrid(blocks){
   const colorMap = profColorMap();
   // 컬럼 정의: 요일 × 학년 × 반
   const columns=[];
@@ -762,6 +859,8 @@ function renderResult(blocks, unplaced, solved, steps){
     if(!b.day) return;
     const ci=colIndex.get(b.day+'|'+b.grade+'|'+b.section);
     if(ci==null) return;
+    // 겹치는 칸이 있으면(데이터 불일치) 표가 깨지지 않도록 그리지 않는다
+    if(b.covered.some(p=>p===LUNCH || !grid[p] || grid[p][ci]!==null)) return;
     grid[b.start][ci]=b;
     for(let k=1;k<b.covered.length;k++) grid[b.start+k][ci]='COVERED';
   });
@@ -796,37 +895,59 @@ function renderResult(blocks, unplaced, solved, steps){
       const cell=grid[period][ci];
       if(cell==='COVERED') return; // 위 rowspan이 덮음 → td 생략
       const allowed = allowedDays(col.grade).includes(col.day);
-      if(cell && cell!=='COVERED'){
-        const bg=colorMap[cell.profId]||'#eee';
-        html+=`<td class="cell" data-prof="${esc(cell.profId)}" rowspan="${cell.hours}" style="background:${bg}" title="${esc(profName(cell.profId))} 강의 강조 보기" onclick="toggleProf('${esc(cell.profId)}')">
-          <div class="cn">${esc(cell.name)}</div>
-          <div class="pr">${esc(profName(cell.profId))}</div>
-          <div class="rm">${esc(roomName(cell.roomId))}</div></td>`;
+      if(cell){
+        const hasProf=!!cell.profId;
+        const bg=hasProf ? (colorMap[cell.profId]||'#eee') : '';
+        // 손입력/자동 모두 data-prof를 심어 두므로 범례 강조가 동일하게 동작한다.
+        const cls='cell'+(cell.manual?' manual':'')+(hasProf?'':' noprof');
+        const badge=cell.manual
+          ? `<span class="mbadge" title="수정/삭제" onclick="event.stopPropagation();editManual('${esc(cell.id)}')">✎</span>` : '';
+        // 교수가 없는 손입력 칸은 클릭해도 강조할 대상이 없으므로 바로 편집창을 연다.
+        const click=hasProf ? `toggleProf('${esc(cell.profId)}')`
+                            : (cell.manual?`editManual('${esc(cell.id)}')`:'');
+        const tip=hasProf ? `${profName(cell.profId)} 강의 강조 보기` : '직접 입력한 수업';
+        html+=`<td class="${cls}" data-prof="${esc(cell.profId||'')}" rowspan="${cell.hours}"${bg?` style="background:${bg}"`:''} title="${esc(tip)}" onclick="${click}">
+          ${badge}<div class="cn">${esc(cell.name)}</div>
+          <div class="pr">${esc(profName(cell.profId))||'&nbsp;'}</div>
+          <div class="rm">${esc(roomName(cell.roomId))||'&nbsp;'}</div></td>`;
       } else {
-        html+=`<td class="${allowed?'':'na'}"></td>`;
+        // 빈 칸 → 클릭하면 직접 입력 (배정 불가 요일도 수동 배치는 허용)
+        html+=`<td class="add${allowed?'':' na'}" title="클릭하여 수업 직접 입력"
+          onclick="newManual('${col.day}',${col.grade},${col.section},${period})"><span class="plus">＋</span></td>`;
       }
     });
     html+='</tr>';
   });
   html+='</tbody></table>';
   document.getElementById('resultWrap').innerHTML=html;
+}
 
-  // ===== 범례(클릭 시 해당 교수 강의 강조) =====
-  activeProf=null; // 재생성 시 강조 해제
+// ===== 범례(클릭 시 해당 교수 강의 강조) =====
+function drawLegend(blocks){
+  const colorMap = profColorMap();
   let lg='<span class="lghint">👇 교수명을 클릭하면 해당 교수의 강의만 강조됩니다 (다시 클릭 시 해제)</span>';
   state.professors.forEach(p=>{
+    // 손으로 입력한 수업도 blocks에 포함되므로 그 교수의 범례가 활성으로 잡힌다.
     const has=blocks.some(b=>b.day && b.profId===p.id);
     lg+=`<span class="lg${has?'':' empty'}" data-prof="${esc(p.id)}" onclick="toggleProf('${esc(p.id)}')" title="${esc(p.name)} 강의 강조">
       <span class="sw" style="background:${colorMap[p.id]}"></span>${esc(p.name)}</span>`;
   });
   document.getElementById('legend').innerHTML=lg;
+}
+
+function renderResult(unplaced, solved, steps){
+  activeProf=null; // 재생성 시 강조 해제
+  renderTimetable();
 
   // ===== 통계/메시지 =====
+  const blocks=autoBlocks();
   const placed=blocks.filter(b=>b.day).length;
+  const manualCnt=(state.manual||[]).length;
   document.getElementById('stats').innerHTML=
     `<span class="stat">총 수업 <b>${blocks.length}</b></span>`+
     `<span class="stat">배정 완료 <b>${placed}</b></span>`+
     `<span class="stat">미배정 <b style="color:#dc2626">${blocks.length-placed}</b></span>`+
+    (manualCnt?`<span class="stat">직접 입력 <b style="color:#7c3aed">${manualCnt}</b></span>`:'')+
     `<span class="stat muted">탐색 ${steps.toLocaleString()}스텝</span>`;
 
   if(placed===blocks.length){
@@ -842,9 +963,14 @@ function renderResult(blocks, unplaced, solved, steps){
 // 범례/셀 클릭 → 해당 교수 강의 강조 토글
 let activeProf=null;
 function toggleProf(profId){
+  if(!profId) return;
+  activeProf = (activeProf===profId) ? null : profId; // 같은 교수 다시 클릭 시 해제
+  applyHighlight();
+}
+// 자동 배정 칸과 직접 입력 칸 모두 data-prof를 갖고 있어 구분 없이 강조된다.
+function applyHighlight(){
   const wrap=document.getElementById('resultWrap');
   const legend=document.getElementById('legend');
-  activeProf = (activeProf===profId) ? null : profId; // 같은 교수 다시 클릭 시 해제
   wrap.querySelectorAll('td.cell').forEach(td=>{
     td.classList.remove('hl','dim');
     if(activeProf){ td.classList.add(td.dataset.prof===activeProf ? 'hl' : 'dim'); }
@@ -855,11 +981,114 @@ function toggleProf(profId){
 }
 
 /* ============================================================
+   시간표 직접 입력 (수기 배치)
+============================================================ */
+let editCtx=null; // 편집 중인 칸의 컨텍스트
+
+// 시작 교시에서 점심(4교시)과 9교시를 넘지 않는 최대 연속 시수
+function maxHoursFrom(start){ return start<=3 ? LUNCH-start : 10-start; }
+
+function newManual(day,grade,section,start){
+  if(!state.professors.length && !state.classrooms.length){
+    msg('warn','교수·강의실을 먼저 등록하면 직접 입력이 편해집니다.');
+  }
+  openEditor({mode:'new', id:null, day, grade, section, start, name:'', profId:'', roomId:'', hours:1});
+}
+function editManual(id){
+  const m=(state.manual||[]).find(x=>x.id===id);
+  if(m) openEditor({mode:'edit', ...m});
+}
+
+function openEditor(ctx){
+  editCtx=ctx;
+  document.getElementById('mTitle').textContent = ctx.mode==='new' ? '수업 직접 입력' : '직접 입력 수업 수정';
+  document.getElementById('mSlot').innerHTML =
+    `${ctx.day}요일 · ${ctx.grade}학년 ${CIRCLE[ctx.section]}반 · ${ctx.start}교시 시작 (${PERIOD_TIME[ctx.start]})`;
+  document.getElementById('mName').value = ctx.name||'';
+
+  const profSel=document.getElementById('mProf');
+  profSel.innerHTML = '<option value="">(미지정)</option>' +
+    state.professors.map(p=>`<option value="${esc(p.id)}" ${ctx.profId===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+
+  const roomSel=document.getElementById('mRoom');
+  roomSel.innerHTML = '<option value="">(미지정)</option>' +
+    state.classrooms.map(r=>`<option value="${esc(r.id)}" ${ctx.roomId===r.id?'selected':''}>${esc(r.name)}${r.isPC?' (PC)':''}</option>`).join('');
+
+  const maxH=maxHoursFrom(ctx.start);
+  const hourSel=document.getElementById('mHours');
+  let ho='';
+  for(let h=1;h<=maxH;h++) ho+=`<option value="${h}" ${ctx.hours===h?'selected':''}>${h}교시 연속 (${ctx.start}~${ctx.start+h-1}교시)</option>`;
+  hourSel.innerHTML=ho;
+  if(ctx.hours>maxH) hourSel.value=String(maxH);
+
+  document.getElementById('mDel').style.display = ctx.mode==='edit' ? '' : 'none';
+  showEditorErr('');
+  document.getElementById('modalBack').classList.add('open');
+  document.getElementById('mName').focus();
+}
+function closeEditor(){ document.getElementById('modalBack').classList.remove('open'); editCtx=null; }
+function showEditorErr(t){
+  const e=document.getElementById('mErr');
+  e.textContent=t; e.classList.toggle('show', !!t);
+}
+
+// 같은 반/교수/강의실이 같은 요일·교시에 겹치는지 검사 (자동 배정분 포함)
+function findConflict(m){
+  const cov=coveredOf(m.start,m.hours);
+  if(m.start+m.hours-1>PERIODS.length) return '9교시를 넘을 수 없습니다.';
+  if(cov.includes(LUNCH)) return '점심시간(4교시)을 포함할 수 없습니다.';
+  for(const b of allBlocks()){
+    if(b.id===m.id || !b.day || b.day!==m.day) continue;
+    if(!b.covered.some(p=>cov.includes(p))) continue;
+    const label=b.name||'(이름 없음)';
+    if(b.grade===m.grade && b.section===m.section) return `같은 반의 [${label}] 수업과 시간이 겹칩니다.`;
+    if(m.profId && b.profId===m.profId) return `담당 교수의 [${label}] 수업과 시간이 겹칩니다.`;
+    if(m.roomId && b.roomId===m.roomId) return `강의실이 [${label}] 수업과 겹칩니다.`;
+  }
+  return '';
+}
+
+function saveManual(){
+  if(!editCtx) return;
+  const name=document.getElementById('mName').value.trim();
+  if(!name){ showEditorErr('과목명을 입력하세요.'); return; }
+  const rec={
+    id: editCtx.id || nid(),
+    name,
+    grade: editCtx.grade, section: editCtx.section,
+    day: editCtx.day, start: editCtx.start,
+    hours: +document.getElementById('mHours').value,
+    profId: document.getElementById('mProf').value,
+    roomId: document.getElementById('mRoom').value
+  };
+  const err=findConflict(rec);
+  if(err){ showEditorErr(err); return; }
+
+  state.manual = state.manual||[];
+  const i=state.manual.findIndex(x=>x.id===rec.id);
+  if(i>=0) state.manual[i]=rec; else state.manual.push(rec);
+  persist(); closeEditor(); renderTimetable();
+}
+function deleteManual(){
+  if(!editCtx || editCtx.mode!=='edit') return;
+  state.manual=(state.manual||[]).filter(x=>x.id!==editCtx.id);
+  persist(); closeEditor(); renderTimetable();
+}
+function clearManual(){
+  if(!(state.manual||[]).length){ msg('warn','직접 입력한 수업이 없습니다.'); return; }
+  if(!confirm(`직접 입력한 수업 ${state.manual.length}건을 모두 삭제할까요?`)) return;
+  state.manual=[]; persist(); renderTimetable();
+  msg('ok','직접 입력한 수업을 모두 삭제했습니다.');
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && editCtx) closeEditor(); });
+
+/* ============================================================
    저장 / 불러오기 / 초기화 / 인쇄
 ============================================================ */
 function serial(){
   return JSON.stringify({classrooms:state.classrooms,courses:state.courses,
-    professors:state.professors,assign:state.assign,uid}, null, 2);
+    professors:state.professors,assign:state.assign,
+    manual:state.manual,timetable:state.timetable,uid}, null, 2);
 }
 function persist(){ try{ localStorage.setItem('ttgen', serial()); }catch(e){} }
 function saveProject(){
@@ -880,17 +1109,18 @@ function applyData(d){
   state.courses=(d.courses||[]).map(c=>({grade:1,hours:3,computer:false,...c}));
   state.professors=(d.professors||[]).map(p=>({day1:'',day2:'',courses:[],...p}));
   state.assign=d.assign||{};
+  state.manual=(d.manual||[]).filter(m=>m && m.day && m.start && m.hours);
+  state.timetable=d.timetable||null;
   uid=d.uid||1000;
+  activeProf=null;
   autoAssign(); render(); persist();
-  document.getElementById('resultWrap').innerHTML='';
-  document.getElementById('legend').innerHTML='';
+  renderTimetable(); // 저장해 둔 배정 결과 + 직접 입력 수업을 그대로 복원
   document.getElementById('stats').innerHTML='';
 }
 function resetAll(){
   if(!confirm('모든 입력 데이터를 삭제하고 초기화할까요?')) return;
-  state=emptyState(); uid=1; persist(); render(); clearMsg();
-  document.getElementById('resultWrap').innerHTML='';
-  document.getElementById('legend').innerHTML='';
+  state=emptyState(); uid=1; activeProf=null; persist(); render(); clearMsg();
+  renderTimetable(); // 빈 시간표(직접 입력 가능 상태)로 되돌린다
   document.getElementById('stats').innerHTML='';
 }
 function printResult(){
@@ -945,8 +1175,10 @@ function loadSample(){
   rooms.forEach(([name,isPC])=>state.classrooms.push({id:nid(),name,isPC}));
   courses.forEach(([name,grade,hours,computer])=>state.courses.push({id:nid(),name,grade,hours,computer}));
   profs.forEach(([name,day1,day2,cs])=>state.professors.push({id:nid(),name,day1,day2,courses:cs}));
-  autoAssign(); render(); persist(); clearMsg();
-  msg('ok','샘플 데이터를 불러왔습니다. [5. 시간표 생성]을 눌러 결과를 확인하세요.');
+  activeProf=null;
+  autoAssign(); render(); persist(); clearMsg(); renderTimetable();
+  document.getElementById('stats').innerHTML='';
+  msg('ok','샘플 데이터를 불러왔습니다. [5. 시간표 생성]을 눌러 결과를 확인하세요. (빈 칸을 클릭하면 직접 입력도 가능합니다)');
 }
 
 /* ============================================================
